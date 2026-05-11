@@ -1,0 +1,56 @@
+# ==========================================
+# Java / Compilados
+# ==========================================
+*.class
+*.jar
+*.war
+*.ear
+
+# Directorios de salida comunes (Maven, Eclipse, VS Code)
+target/
+bin/
+out/
+build/
+
+# ==========================================
+# C++ / Nativos (Preparación Sprint 3)
+# ==========================================
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+
+# ==========================================
+# Entornos de Desarrollo (IDE)
+# ==========================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA (Por si acaso algún colaborador lo usa)
+.idea/
+*.iml
+out/
+
+# Eclipse
+.metadata
+.classpath
+.project
+.settings/
+
+# ==========================================
+# Sistema Operativo / Otros
+# ==========================================
+# Archivos temporales de Linux/WSL y macOS
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Archivos de Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
