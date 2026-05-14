@@ -6,143 +6,146 @@
 #include <unistd.h>
 #include <cstring>
 #include <stdexcept>
-#include <chrono> // Para medir el tiempo
+#include <chrono>
+#include <vector>
 
-// Tamaño fijo de tu protocolo: 1 byte (Tipo) + 4 bytes (ID) + 4 bytes (Longitud)
 const int HEADER_SIZE = 9;
 
-ImageNodeServer::ImageNodeServer(int port, int numThreads) : port(port), numThreads(numThreads), serverSocket(-1) {}
+// --- CONSTRUCTOR ---
+ImageNodeServer::ImageNodeServer(int port, int numThreads)
+    : port(port), numThreads(numThreads), serverSocket(-1), rnnTool(784, 128, 10) {
 
-void ImageNodeServer::start() {
-    // 1. Crear el socket (IPv4, TCP)
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket == -1) {
-        throw std::runtime_error("Error al crear el socket POSIX.");
+    if (!rnnTool.loadWeights("pesos_chatbot.txt")) {
+        throw std::runtime_error("Error crítico: No se pudo cargar pesos_chatbot.txt");
     }
+}
 
-    // Permitir reusar el puerto inmediatamente después de cerrar el servidor
+// --- INICIAR SERVIDOR ---
+void ImageNodeServer::start() {
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == -1) throw std::runtime_error("Error al crear socket.");
+
     int opt = 1;
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    // 2. Configurar la dirección
     sockaddr_in serverAddress{};
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_addr.s_addr = INADDR_ANY; // Escuchar en todas las interfaces
-    serverAddress.sin_port = htons(port);       // Host To Network Short
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
+    serverAddress.sin_port = htons(port);
 
-    // 3. Bind
     if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
-        throw std::runtime_error("Error en el bind del puerto " + std::to_string(port));
+        throw std::runtime_error("Error en el bind.");
     }
 
-    // 4. Listen
-    if (listen(serverSocket, 10) < 0) {
-        throw std::runtime_error("Error al escuchar en el puerto.");
-    }
+    if (listen(serverSocket, 10) < 0) throw std::runtime_error("Error en listen.");
 
-    std::cout << "[C++ Node] Servidor de Imágenes (POSIX) iniciado en el puerto: " << port << std::endl;
+    std::cout << "[C++ Node] Servidor UNI activo en puerto " << port << std::endl;
 
-    // 5. Ciclo de aceptación (Secuencial por ahora, paralelismo viene en Issue 3.3)
     while (true) {
         sockaddr_in clientAddress{};
         socklen_t clientLen = sizeof(clientAddress);
         int clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddress, &clientLen);
-        
+
         if (clientSocket < 0) {
             std::cerr << "Error al aceptar conexión." << std::endl;
             continue;
         }
 
         handleConnection(clientSocket);
-        close(clientSocket); // Cerramos después de responder
+        close(clientSocket);
     }
 }
 
+// --- MANEJAR CONEXIÓN ---
 void ImageNodeServer::handleConnection(int clientSocket) {
-    // A. Leer la cabecera (9 bytes)
+    // 1. Leer Cabecera (9 bytes)
     std::vector<uint8_t> headerBuffer(HEADER_SIZE);
-    int bytesRead = recv(clientSocket, headerBuffer.data(), HEADER_SIZE, MSG_WAITALL);
-    
-    if (bytesRead < HEADER_SIZE) {
-        std::cerr << "Cabecera incompleta recibida." << std::endl;
-        return;
-    }
+    if (recv(clientSocket, headerBuffer.data(), HEADER_SIZE, MSG_WAITALL) < HEADER_SIZE) return;
 
-    // B. Decodificar controlando el Endianness
     uint8_t nodeType = headerBuffer[0];
-    
     uint32_t clientIdNet, payloadLenNet;
     std::memcpy(&clientIdNet, &headerBuffer[1], 4);
     std::memcpy(&payloadLenNet, &headerBuffer[5], 4);
-    
-    // ntohl: Network TO Host Long
+
     uint32_t clientId = ntohl(clientIdNet);
     uint32_t payloadLength = ntohl(payloadLenNet);
 
-    std::cout << "[C++] Petición recibida - ID Cliente: " << clientId 
-              << ", Longitud Payload: " << payloadLength << " bytes." << std::endl;
-
-    // C. Leer el Payload
-    std::vector<char> payloadBuffer(payloadLength);
-    int payloadRead = 0;
-    while (payloadRead < payloadLength) {
-        int r = recv(clientSocket, payloadBuffer.data() + payloadRead, payloadLength - payloadRead, 0);
+    // 2. Leer Payload (Imagen)
+    std::vector<uint8_t> payloadBuffer(payloadLength);
+    uint32_t totalRead = 0;
+    while (totalRead < payloadLength) {
+        ssize_t r = recv(clientSocket, reinterpret_cast<char*>(payloadBuffer.data()) + totalRead, payloadLength - totalRead, 0);
         if (r <= 0) break;
-        payloadRead += r;
+        totalRead += static_cast<uint32_t>(r);
     }
 
-    // D. Procesamiento Real de Convolución
-    std::cout << "[C++] Iniciando convolución paralela en matriz 2000x2000..." << std::endl;
+    auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Simulamos una imagen grande (2000x2000)
-    Matrix image(2000, 2000);
-    image.randomize();
+    // 3. Reconstrucción y Normalización
+    Matrix image(28, 28);
+    double sum = 0.0;
+    // En ImageNodeServer::handleConnection
+    for (int i = 0; i < 28; ++i) {
+        for (int j = 0; j < 28; ++j) {
+            // Usar unsigned char explícitamente antes del cast a double
+            uint8_t pixelRaw = static_cast<uint8_t>(payloadBuffer[i * 28 + j]);
+            double pixelValue = static_cast<double>(pixelRaw) / 255.0;
+            image.set(i, j, pixelValue);
+        }
+    }
 
-    // Kernel típico de 3x3 (ej. detección de bordes)
+    std::cout << "[DEBUG] ID: " << clientId << " | Suma Real: " << sum << std::endl;
+
+    // 4. Convolución (Identidad)
     Matrix kernel(3, 3);
-    kernel.randomize();
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            kernel.set(i, j, 0.0);
+        }
+    }
+    kernel.set(1, 1, 1.0);
 
     ConvolutionChunk convChunk;
-    // Medición de tiempo con alta resolución en C++
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    // Le pasamos numThreads a tu chunk
-    Matrix result = convChunk.process(image, kernel, numThreads);
-    
+    Matrix convolved = convChunk.process(image, kernel, numThreads);
+
+    // 5. Inferencia RNN
+    std::vector<double> prediction = rnnTool.execute(convolved.toStdVector());
+
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    // === FIN PROCESAMIENTO ===
 
-    std::string response = "Convolucion nativa (" + std::to_string(numThreads) + " hilos) completada en " 
-                           + std::to_string(duration.count()) + "ms. Dimension: " 
-                           + std::to_string(result.getRows()) + "x" + std::to_string(result.getCols());
+    // 6. Post-procesamiento
+    int digit = 0;
+    double maxProb = -1.0;
+    for (int i = 0; i < (int)prediction.size(); ++i) {
+        if (prediction[i] > maxProb) {
+            maxProb = prediction[i];
+            digit = i;
+        }
+    }
 
-    // E. Enviar respuesta empaquetada
+    // 7. Enviar Respuesta
+    std::string response = "ID:" + std::to_string(clientId) + " | Pred: " + std::to_string(digit) +
+                           " | Latencia: " + std::to_string(duration.count()) + "ms";
+
     sendResponse(clientSocket, nodeType, clientId, response);
 }
 
+// --- ENVIAR RESPUESTA ---
 void ImageNodeServer::sendResponse(int clientSocket, uint8_t nodeType, uint32_t clientId, const std::string& responseText) {
     uint32_t payloadLen = responseText.length();
-
-    // htonl: Host TO Network Long
     uint32_t clientIdNet = htonl(clientId);
     uint32_t payloadLenNet = htonl(payloadLen);
 
-    // Empaquetar
-    std::vector<uint8_t> responsePacket;
-    responsePacket.reserve(HEADER_SIZE + payloadLen);
-    
-    responsePacket.push_back(nodeType);
-    
-    uint8_t* idPtr = reinterpret_cast<uint8_t*>(&clientIdNet);
-    responsePacket.insert(responsePacket.end(), idPtr, idPtr + 4);
-    
-    uint8_t* lenPtr = reinterpret_cast<uint8_t*>(&payloadLenNet);
-    responsePacket.insert(responsePacket.end(), lenPtr, lenPtr + 4);
-    
-    // Agregar payload
-    responsePacket.insert(responsePacket.end(), responseText.begin(), responseText.end());
+    std::vector<uint8_t> packet;
+    packet.reserve(HEADER_SIZE + payloadLen);
 
-    // Enviar
-    send(clientSocket, responsePacket.data(), responsePacket.size(), 0);
+    packet.push_back(nodeType);
+    uint8_t* idPtr = reinterpret_cast<uint8_t*>(&clientIdNet);
+    packet.insert(packet.end(), idPtr, idPtr + 4);
+    uint8_t* lenPtr = reinterpret_cast<uint8_t*>(&payloadLenNet);
+    packet.insert(packet.end(), lenPtr, lenPtr + 4);
+    packet.insert(packet.end(), responseText.begin(), responseText.end());
+
+    send(clientSocket, packet.data(), packet.size(), 0);
 }
