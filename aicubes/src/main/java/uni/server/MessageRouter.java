@@ -10,15 +10,23 @@ public class MessageRouter {
 
     private final NodeDispatcher dispatcher;
 
+    /**
+     * Constructor por defecto (Retrocompatibilidad).
+     * Crea un dispatcher local.
+     */
     public MessageRouter() {
         // Instanciamos el despachador que abrirá los sockets locales hacia los nodos
         this.dispatcher = new NodeDispatcher();
     }
 
     /**
-     * Procesa el mensaje entrante basado en el ID y tipo de nodo.
-     * Ahora delega el procesamiento real a los nodos a través de la red interna.
+     * Constructor distribuido.
+     * Pasa la topología de red al dispatcher.
      */
+    public MessageRouter(String textHost, int textPort, String imgHost, int imgPort) {
+        this.dispatcher = new NodeDispatcher(textHost, textPort, imgHost, imgPort);
+    }
+
     public ProtocolMessage route(ProtocolMessage incomingMessage) {
         int clientId = incomingMessage.getClientId();
         byte targetNode = incomingMessage.getNodeType();
@@ -36,4 +44,10 @@ public class MessageRouter {
             return new ProtocolMessage(targetNode, clientId, errorMsg.getBytes());
         }
     }
+    
+    // Getters opcionales para imprimir logs de topología en el CentralServer
+    public String getTextHost() { return "Configurado en Dispatcher"; }
+    public int getTextPort() { return 9001; }
+    public String getImgHost() { return "Configurado en Dispatcher"; }
+    public int getImgPort() { return 9002; }
 }

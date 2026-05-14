@@ -63,4 +63,21 @@ public class TextProcessor implements TaskProcessor {
             workerPool.shutdown();
         }
     }
+
+    /**
+     * Punto de entrada para el Nodo de Texto independiente.
+     * Uso: java uni.module.TextProcessor [puerto] [hilos]
+     */
+    public static void main(String[] args) {
+        int port = 9001;
+        int threads = 4;
+
+        if (args.length >= 1) port = Integer.parseInt(args[0]);
+        if (args.length >= 2) threads = Integer.parseInt(args[1]);
+
+        System.out.println(">>> Iniciando Cubo de Texto (Independiente)");
+        System.out.println(">>> Escuchando en puerto: " + port + " con " + threads + " hilos.");
+        
+        new NodeServer(port, new TextProcessor(threads)).start();
+    }
 }

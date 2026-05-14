@@ -5,7 +5,7 @@ CXX = g++
 # -std=c++17: Usa el estándar moderno de C++
 # -Wall -Wextra: Muestra todas las advertencias de seguridad
 # -Iinclude: Le dice al compilador dónde buscar los archivos .hpp
-# -pthread: VITAL para poder usar std::thread (El paralelismo de tu Issue 3.3)
+# -pthread: VITAL para poder usar std::thread (El paralelismo del Issue 3.3)
 CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude -pthread
 
 # Directorios

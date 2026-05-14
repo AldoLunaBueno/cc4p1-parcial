@@ -19,6 +19,8 @@ public class DesktopUI extends Application {
     private AIClient aiClient;
     private TextArea chatArea;
     private TextField inputField;
+    private TextField ipServerField;
+    private Button connectBtn;
     private Button sendTextBtn;
     private Button sendImageBtn;
     private Label statusLabel;
@@ -32,44 +34,63 @@ public class DesktopUI extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("Open AI Cube - UNI CC4P1");
+        primaryStage.setTitle("Open AI Cube - Cliente Distribuido");
 
-        // 1. Área de Chat (Historial)
+        // --- 1. Barra de Conexión ---
+        ipServerField = new TextField("127.0.0.1");
+        ipServerField.setPromptText("IP Servidor Central");
+        connectBtn = new Button("Conectar");
+        
+        HBox connectionBox = new HBox(10, new Label("Host:"), ipServerField, connectBtn);
+        connectionBox.setPadding(new Insets(10));
+        connectionBox.setStyle("-fx-background-color: #e0e0e0;");
+
+        // --- 2. Área de Chat ---
         chatArea = new TextArea();
         chatArea.setEditable(false);
         chatArea.setWrapText(true);
         VBox.setVgrow(chatArea, Priority.ALWAYS);
 
-        // 2. Campo de entrada
+        // --- 3. Controles de Mensaje ---
         inputField = new TextField();
-        inputField.setPromptText("Escribe tu consulta de texto aquí...");
+        inputField.setPromptText("Ingrese consulta...");
         HBox.setHgrow(inputField, Priority.ALWAYS);
 
         // 3. Botones de acción
         sendTextBtn = new Button("Enviar Texto");
         sendImageBtn = new Button("Enviar Imagen");
         
-        statusLabel = new Label("Estado: Listo");
+        // Bloqueo inicial según requerimiento
+        setControlsEnabled(false);
 
         HBox actionBox = new HBox(10, inputField, sendTextBtn, sendImageBtn);
-        actionBox.setPadding(new Insets(10, 0, 0, 0));
+        statusLabel = new Label("Estado: Desconectado");
 
-        // Layout Principal
-        VBox root = new VBox(10, chatArea, actionBox, statusLabel);
-        root.setPadding(new Insets(15));
-        root.setStyle("-fx-background-color: #f4f4f4;");
-
-        // --- Eventos ---
+        // --- Lógica de Conexión ---
+        connectBtn.setOnAction(e -> {
+            String host = ipServerField.getText().trim();
+            if (!host.isEmpty()) {
+                this.aiClient = new AIClient(host, 8080, 812);
+                setControlsEnabled(true);
+                statusLabel.setText("Estado: Conectado a " + host);
+                appendMessage("SISTEMA: Conexión establecida con el Cubo Central.");
+            }
+        });
 
         sendTextBtn.setOnAction(e -> handleSendText());
-        
-        inputField.setOnAction(e -> handleSendText());
-
         sendImageBtn.setOnAction(e -> handleSendImage(primaryStage));
 
-        Scene scene = new Scene(root, 600, 400);
-        primaryStage.setScene(scene);
+        VBox root = new VBox(connectionBox, chatArea, actionBox, statusLabel);
+        root.setPadding(new Insets(10));
+        
+        primaryStage.setScene(new Scene(root, 700, 500));
         primaryStage.show();
+    }
+
+    private void setControlsEnabled(boolean enabled) {
+        sendTextBtn.setDisable(!enabled);
+        sendImageBtn.setDisable(!enabled);
+        inputField.setDisable(!enabled);
     }
 
     private void handleSendText() {

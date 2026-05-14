@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <chrono> // Para medir el tiempo
 
-// Tamaño fijo de tu protocolo: 1 byte (Tipo) + 4 bytes (ID) + 4 bytes (Longitud)
+// Tamaño fijo del protocolo: 1 byte (Tipo) + 4 bytes (ID) + 4 bytes (Longitud)
 const int HEADER_SIZE = 9;
 
 ImageNodeServer::ImageNodeServer(int port, int numThreads) : port(port), numThreads(numThreads), serverSocket(-1) {}
@@ -106,7 +106,7 @@ void ImageNodeServer::handleConnection(int clientSocket) {
     // Medición de tiempo con alta resolución en C++
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    // Le pasamos numThreads a tu chunk
+    // Le pasamos numThreads al chunk
     Matrix result = convChunk.process(image, kernel, numThreads);
     
     auto end_time = std::chrono::high_resolution_clock::now();

@@ -29,6 +29,17 @@ public class CentralServer {
         }
     }
 
+    public CentralServer(int port, int maxThreads, String textHost, int textPort, String imgHost, int imgPort) {
+        this.port = port;
+        this.router = new MessageRouter(textHost, textPort, imgHost, imgPort);
+        // Controlamos el paralelismo del servidor proxy
+        if (maxThreads <= 1) {
+            this.threadPool = Executors.newSingleThreadExecutor();
+        } else {
+            this.threadPool = Executors.newCachedThreadPool(); 
+        }
+    }
+
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Servidor Central iniciado en el puerto: " + port);
@@ -92,5 +103,18 @@ public class CentralServer {
         byte[] responseBytes = MessageCodec.encode(response);
         out.write(responseBytes);
         out.flush();
+    }
+
+    public static void main(String[] args) {
+        if (args.length < 6) {
+            System.out.println("Faltan argumentos. Uso distribuido: java CentralServer <port> <threads> <tHost> <tPort> <iHost> <iPort>");
+            return;
+        }
+        CentralServer server = new CentralServer(
+            Integer.parseInt(args[0]), Integer.parseInt(args[1]), 
+            args[2], Integer.parseInt(args[3]), 
+            args[4], Integer.parseInt(args[5])
+        );
+        server.start();
     }
 }
