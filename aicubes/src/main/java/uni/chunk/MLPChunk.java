@@ -6,26 +6,28 @@ import java.util.concurrent.ExecutorService;
 
 public class MLPChunk {
     private final ExecutorService executor;
-    private final int numThreads = 4; // Ajustado para los 4 hilos solicitados 
 
     public MLPChunk(ExecutorService executor) {
-        this.executor = executor;
+        this.executor = executor; // Puede ser un FixedThreadPool o null para modo secuencial
     }
 
-    /**
-     * Multiplica dos matrices en paralelo saturando los núcleos físicos disponibles.
-     */
-    public Matrix multiplyParallel(Matrix input, Matrix weights) throws InterruptedException {
-        System.out.println("[MLPChunk] Iniciando multiplicación paralela con " + numThreads + " hilos...");
+    public Matrix multiply(Matrix input, Matrix weights, int numThreads) throws InterruptedException {
+        // Caso 1 y Caso 3: Secuencial puro (Sin sobrecarga de CountDownLatch)
+        if (numThreads <= 1 || executor == null) {
+            Matrix result = new Matrix(input.getRows(), weights.getCols());
+            multiplyBlock(input, weights, result, 0, input.getRows());
+            return result;
+        }
+
+        // Caso 2 y Caso 4: Paralelo puro
         Matrix result = new Matrix(input.getRows(), weights.getCols());
         CountDownLatch latch = new CountDownLatch(numThreads);
         
         int rowsPerThread = input.getRows() / numThreads;
 
         for (int t = 0; t < numThreads; t++) {
-            final int threadIndex = t;
-            final int startRow = threadIndex * rowsPerThread;
-            final int endRow = (threadIndex == numThreads - 1) ? input.getRows() : startRow + rowsPerThread;
+            final int startRow = t * rowsPerThread;
+            final int endRow = (t == numThreads - 1) ? input.getRows() : startRow + rowsPerThread;
 
             executor.submit(() -> {
                 try {

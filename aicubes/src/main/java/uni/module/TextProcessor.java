@@ -11,34 +11,42 @@ public class TextProcessor implements TaskProcessor {
     private final EmbeddingChunk embeddingChunk;
     private final MLPChunk mlpChunk;
     private final ExecutorService workerPool;
+    private final int numThreads;
 
-    public TextProcessor() {
+    public TextProcessor(int numThreads) {
+        this.numThreads = numThreads;
         this.embeddingChunk = new EmbeddingChunk();
-        // Pool de 4 hilos fijos dedicado a los micro chunks matemáticos
-        this.workerPool = Executors.newFixedThreadPool(4); 
+        
+        // Si es 1 hilo (Caso 1 y 3), no hay pool. Si es > 1 (Caso 2 y 4), creamos el pool.
+        if (numThreads > 1) {
+            this.workerPool = Executors.newFixedThreadPool(numThreads);
+        } else {
+            this.workerPool = null;
+        }
         this.mlpChunk = new MLPChunk(workerPool);
     }
 
     @Override
     public byte[] process(byte[] payload) {
         try {
-            // 1. Recepción y decodificación
             String text = new String(payload);
-            
-            // 2. Llamada al Micro Chunk de Embeddings
-            // Generamos una matriz de 1000x1000 para saturar la CPU
             Matrix textEmbeddings = embeddingChunk.process(text, 1000, 1000);
             
-            // Simulación de los pesos de la red neuronal (Weights)
             Matrix mlpWeights = new Matrix(1000, 1000);
             mlpWeights.randomize();
 
-            // 3. Llamada al Micro Chunk de MLP (Procesamiento Paralelo)
-            Matrix finalOutput = mlpChunk.multiplyParallel(textEmbeddings, mlpWeights);
+            // === INICIO DE MEDICIÓN DE TIEMPO ===
+            long startTime = System.currentTimeMillis();
+            
+            // Usamos el método multiply que adaptamos para aceptar numThreads
+            Matrix finalOutput = mlpChunk.multiply(textEmbeddings, mlpWeights, numThreads);
+            
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            // === FIN DE MEDICIÓN ===
 
-            // 4. Empaquetado final (Simulamos la respuesta del chat)
-            String responseStr = "Inferencia paralela completada. Dimensión de salida: " + 
-                                 finalOutput.getRows() + "x" + finalOutput.getCols();
+            String responseStr = "Inferencia (" + numThreads + " hilos) completada en " + duration + "ms. " +
+                                 "Dimensión: " + finalOutput.getRows() + "x" + finalOutput.getCols();
             return responseStr.getBytes();
 
         } catch (InterruptedException e) {

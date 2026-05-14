@@ -15,11 +15,18 @@ public class CentralServer {
     private final MessageRouter router;
     private final ExecutorService threadPool;
 
-    public CentralServer(int port) {
+    public CentralServer(int port, int maxThreads) {
         this.port = port;
         this.router = new MessageRouter();
-        // Usamos un pool dinámico ideal para tareas I/O intensivas (red)
-        this.threadPool = Executors.newCachedThreadPool();
+        
+        // Controlamos el paralelismo del servidor proxy
+        if (maxThreads <= 1) {
+            this.threadPool = Executors.newSingleThreadExecutor();
+        } else {
+            // newCachedThreadPool es ideal para red, pero limitamos conceptualmente 
+            // con maxThreads si quisiéramos un FixedThreadPool. Para I/O Cached es mejor.
+            this.threadPool = Executors.newCachedThreadPool(); 
+        }
     }
 
     public void start() {

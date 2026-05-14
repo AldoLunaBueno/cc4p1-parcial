@@ -36,7 +36,7 @@ public class SystemIntegrationTest {
 
         // 3. Iniciar Servidor Central en un hilo en segundo plano
         new Thread(() -> {
-            new CentralServer(CENTRAL_PORT).start();
+            new CentralServer(CENTRAL_PORT, 1).start();
         }).start();
 
         // Dar tiempo a que los ServerSockets se inicialicen correctamente (1.5 segundos)

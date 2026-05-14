@@ -47,7 +47,7 @@ class ConcurrencyTest {
         }
 
         // Ejecutamos la multiplicación concurrente
-        Matrix result = mlpChunk.multiplyParallel(A, B);
+        Matrix result = mlpChunk.multiply(A, B, 4);
 
         // Verificamos que el algoritmo paralelo ensambla bien los bloques
         // Si A está llena de 2s y B de 3s, cada celda de C debería ser: 4 * (2 * 3) = 24.0
@@ -62,19 +62,19 @@ class ConcurrencyTest {
         }
     }
 
-    @Test
+@Test
     void testTextProcessorIntegration() {
         // Probamos que el orquestador general divide bien las tareas y espera a los chunks
-        TextProcessor processor = new TextProcessor();
+        int hilosPrueba = 4;
+        TextProcessor processor = new TextProcessor(hilosPrueba);
         String dummyPayload = "Hola Open AI Cubes";
         
-        // El TextProcessor genera matrices de 1000x1000 internamente, esto debe tomar un instante
         byte[] response = processor.process(dummyPayload.getBytes());
         String responseStr = new String(response);
         
-        // Verificamos que el string de retorno es el esperado y no hubo InterruptedException
-        assertTrue(responseStr.contains("Inferencia paralela completada"), 
-            "El procesador devolvió un error o no terminó el procesamiento de los chunks.");
+        // Verificamos que el string de retorno contenga la nueva firma con el número de hilos
+        assertTrue(responseStr.contains("Inferencia (" + hilosPrueba + " hilos) completada"), 
+            "El procesador devolvió un error, no terminó, o el texto de respuesta no coincide. Recibido: " + responseStr);
         assertTrue(responseStr.contains("1000x1000"), 
             "Las dimensiones de la matriz final no son las esperadas.");
             
