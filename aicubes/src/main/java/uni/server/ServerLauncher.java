@@ -1,19 +1,20 @@
 package uni.server;
 
-import uni.node.ImageDummyProcessor;
-import uni.node.NodeServer;
-import uni.node.TextDummyProcessor;
+import uni.module.ImageDummyProcessor;
+import uni.module.NodeServer;
+import uni.module.TextProcessor;
 
 public class ServerLauncher {
     public static void main(String[] args) {
-        System.out.println("Iniciando infraestructura Open AI Cubes (Sprint 1)...");
+        System.out.println("Iniciando infraestructura Open AI Cubes (Sprint 2 - Paralelismo)...");
 
-        // 1. Levantar el Nodo de Texto (Puerto 9001) en su propio hilo
+        // 1. Levantar el Nodo de Texto con el procesador matemático concurrente
         new Thread(() -> {
-            new NodeServer(9001, new TextDummyProcessor()).start();
+            // Pasamos nuestro nuevo TextProcessor que maneja los hilos internamente
+            new NodeServer(9001, new TextProcessor()).start();
         }).start();
 
-        // 2. Levantar el Nodo de Imagen (Puerto 9002) en su propio hilo
+        // 2. Levantar el Nodo de Imagen (Aún en versión Dummy para este sprint)
         new Thread(() -> {
             new NodeServer(9002, new ImageDummyProcessor()).start();
         }).start();
@@ -25,8 +26,8 @@ public class ServerLauncher {
             Thread.currentThread().interrupt();
         }
 
-        // 3. Levantar el Servidor Central (Puerto 8080) en el hilo principal
-        System.out.println("Iniciando enrutador principal...");
+        // 3. Levantar el Servidor Central multihilo
+        System.out.println("Iniciando enrutador principal multihilo...");
         new CentralServer(8080).start();
     }
 }

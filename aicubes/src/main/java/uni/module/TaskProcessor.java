@@ -1,4 +1,4 @@
-package uni.node;
+package uni.module;
 
 public interface TaskProcessor {
     /**

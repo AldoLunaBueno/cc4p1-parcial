@@ -7,30 +7,44 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class CentralServer {
     private final int port;
     private final MessageRouter router;
+    private final ExecutorService threadPool;
 
     public CentralServer(int port) {
         this.port = port;
         this.router = new MessageRouter();
+        // Usamos un pool dinámico ideal para tareas I/O intensivas (red)
+        this.threadPool = Executors.newCachedThreadPool();
     }
 
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Servidor Central iniciado en el puerto: " + port);
             
-            // Ciclo secuencial (Sprint 1)
             while (true) {
-                try (Socket clientSocket = serverSocket.accept()) {
-                    handleConnection(clientSocket);
+                try {
+                    Socket clientSocket = serverSocket.accept();
+                    // Delegamos la conexión a un hilo del pool para no bloquear el ciclo
+                    threadPool.submit(() -> {
+                        try (clientSocket) { // Try-with-resources para el auto-cierre del socket
+                            handleConnection(clientSocket);
+                        } catch (Exception e) {
+                            System.err.println("Error procesando conexión: " + e.getMessage());
+                        }
+                    });
                 } catch (Exception e) {
-                    System.err.println("Error procesando conexión: " + e.getMessage());
+                    System.err.println("Error aceptando cliente: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
+        } finally {
+            threadPool.shutdown();
         }
     }
 

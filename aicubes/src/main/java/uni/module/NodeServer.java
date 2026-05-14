@@ -1,4 +1,4 @@
-package uni.node;
+package uni.module;
 
 import uni.protocol.MessageCodec;
 import uni.protocol.ProtocolMessage;

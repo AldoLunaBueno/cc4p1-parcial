@@ -4,9 +4,9 @@ package uni.integration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import uni.client.AIClient;
-import uni.node.ImageDummyProcessor;
-import uni.node.NodeServer;
-import uni.node.TextDummyProcessor;
+import uni.module.ImageDummyProcessor;
+import uni.module.NodeServer;
+import uni.module.TextDummyProcessor;
 import uni.server.CentralServer;
 import uni.server.MessageRouter;
 

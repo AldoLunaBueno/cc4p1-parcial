@@ -1,4 +1,4 @@
-package uni.node;
+package uni.module;
 
 public class TextDummyProcessor implements TaskProcessor {
     @Override
