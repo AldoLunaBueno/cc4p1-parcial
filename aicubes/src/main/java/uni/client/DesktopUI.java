@@ -4,18 +4,16 @@ import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import javax.imageio.ImageIO;
+
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.embed.swing.SwingFXUtils; // Para convertir entre JavaFX y Swing
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import javax.imageio.ImageIO;
 import uni.server.MessageRouter;
 
 public class DesktopUI extends Application {
@@ -23,57 +21,75 @@ public class DesktopUI extends Application {
     private AIClient aiClient;
     private TextArea chatArea;
     private TextField inputField;
+    private TextField ipServerField;
+    private Button connectBtn;
     private Button sendTextBtn;
     private Button sendImageBtn;
     private Label statusLabel;
 
     @Override
-    public void init() {
-        // Inicializamos el cliente (Host, Puerto, ID de Cliente)
-        // En un escenario real, esto podría venir de un login
-        this.aiClient = new AIClient("127.0.0.1", 8080, 812);
-    }
-
-    @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("Open AI Cube - UNI CC4P1");
+        primaryStage.setTitle("Open AI Cube - Cliente Distribuido");
 
-        // 1. Área de Chat (Historial)
+        // --- 1. Barra de Conexión (Nuestro diseño distribuido) ---
+        ipServerField = new TextField("127.0.0.1");
+        ipServerField.setPromptText("IP Servidor Central");
+        connectBtn = new Button("Conectar");
+        
+        HBox connectionBox = new HBox(10, new Label("Host:"), ipServerField, connectBtn);
+        connectionBox.setPadding(new Insets(10));
+        connectionBox.setStyle("-fx-background-color: #e0e0e0;");
+
+        // --- 2. Área de Chat ---
         chatArea = new TextArea();
         chatArea.setEditable(false);
         chatArea.setWrapText(true);
         VBox.setVgrow(chatArea, Priority.ALWAYS);
 
-        // 2. Campo de entrada
+        // --- 3. Controles de Mensaje ---
         inputField = new TextField();
         inputField.setPromptText("Escribe tu consulta de texto aquí...");
         HBox.setHgrow(inputField, Priority.ALWAYS);
-
-        // 3. Botones de acción
+        
         sendTextBtn = new Button("Enviar Texto");
         sendImageBtn = new Button("Enviar Imagen");
-
-        statusLabel = new Label("Estado: Listo");
+        
+        // Bloqueo inicial hasta que haya conexión
+        setControlsEnabled(false);
 
         HBox actionBox = new HBox(10, inputField, sendTextBtn, sendImageBtn);
         actionBox.setPadding(new Insets(10, 0, 0, 0));
+        
+        statusLabel = new Label("Estado: Desconectado");
 
-        // Layout Principal
-        VBox root = new VBox(10, chatArea, actionBox, statusLabel);
-        root.setPadding(new Insets(15));
-        root.setStyle("-fx-background-color: #f4f4f4;");
-
-        // --- Eventos ---
+        // --- Lógica de Interfaz ---
+        connectBtn.setOnAction(e -> {
+            String host = ipServerField.getText().trim();
+            if (!host.isEmpty()) {
+                int clientId = (int) (Math.random() * 1000);
+                this.aiClient = new AIClient(host, 8080, clientId);
+                setControlsEnabled(true);
+                statusLabel.setText("Estado: Conectado a " + host);
+                appendMessage("SISTEMA: Conexión establecida con el Cubo Central.");
+            }
+        });
 
         sendTextBtn.setOnAction(e -> handleSendText());
-
         inputField.setOnAction(e -> handleSendText());
-
         sendImageBtn.setOnAction(e -> handleSendImage(primaryStage));
 
-        Scene scene = new Scene(root, 600, 400);
-        primaryStage.setScene(scene);
+        VBox root = new VBox(10, connectionBox, chatArea, actionBox, statusLabel);
+        root.setPadding(new Insets(15));
+        root.setStyle("-fx-background-color: #f4f4f4;");
+        
+        primaryStage.setScene(new Scene(root, 700, 500));
         primaryStage.show();
+    }
+
+    private void setControlsEnabled(boolean enabled) {
+        sendTextBtn.setDisable(!enabled);
+        sendImageBtn.setDisable(!enabled);
+        inputField.setDisable(!enabled);
     }
 
     private void handleSendText() {
@@ -82,52 +98,37 @@ public class DesktopUI extends Application {
 
         appendMessage("Yo (Texto): " + text);
         inputField.clear();
-        processTask(MessageRouter.NODE_TEXT, text);
+        // Enviamos el texto convirtiéndolo a bytes
+        processTask(MessageRouter.NODE_TEXT, text.getBytes());
     }
 
     private void handleSendImage(Stage stage) {
         FileChooser fileChooser = new FileChooser();
-        // ... tu configuración de fileChooser ...
-
+        fileChooser.setTitle("Seleccionar Imagen para el Cubo");
+        fileChooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("Imágenes", "*.png", "*.jpg", "*.jpeg")
+        );
+        
         File file = fileChooser.showOpenDialog(stage);
         if (file != null) {
-            appendMessage("Yo (Imagen): " + file.getName());
+            appendMessage("Yo (Imagen): Procesando archivo " + file.getName() + "...");
 
             try {
-                // 1. Convertir archivo a 784 bytes (28x28 escala de grises)
+                // Usamos la excelente lógica matemática de tu compañero
                 byte[] pixeles = transformarImagen(file);
-
-                // 2. Enviar los bytes reales, NO el nombre del archivo
-                setLoading(true);
-                new Thread(() -> {
-                    // Aquí usamos una versión de sendTask que acepte byte[]
-                    String response = aiClient.sendTask(
-                        MessageRouter.NODE_IMAGE,
-                        pixeles
-                    );
-
-                    Platform.runLater(() -> {
-                        appendMessage("ChatCube: " + response);
-                        setLoading(false);
-                    });
-                })
-                    .start();
+                processTask(MessageRouter.NODE_IMAGE, pixeles);
             } catch (Exception e) {
                 appendMessage("Error procesando imagen: " + e.getMessage());
             }
         }
     }
 
+    // --- ALGORITMO DE TRANSFORMACIÓN DE IMAGEN (Conservado intacto) ---
     private byte[] transformarImagen(File file) throws Exception {
         BufferedImage original = ImageIO.read(file);
 
-        // 1. Redimensionar a 28x28 y convertir a escala de grises
         Image scaled = original.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
-        BufferedImage resized = new BufferedImage(
-            28,
-            28,
-            BufferedImage.TYPE_BYTE_GRAY
-        );
+        BufferedImage resized = new BufferedImage(28, 28, BufferedImage.TYPE_BYTE_GRAY);
         Graphics2D g2d = resized.createGraphics();
         g2d.drawImage(scaled, 0, 0, null);
         g2d.dispose();
@@ -135,56 +136,43 @@ public class DesktopUI extends Application {
         byte[] pixeles = new byte[784];
         double sumaCheck = 0;
 
-        // Primer pase: calcular brillo promedio para decidir si invertir
         for (int y = 0; y < 28; y++) {
             for (int x = 0; x < 28; x++) {
                 sumaCheck += (resized.getRGB(x, y) & 0xFF);
             }
         }
-        boolean debeInvertir = (sumaCheck / 784.0) > 127; // Si el promedio es claro, invertimos
+        boolean debeInvertir = (sumaCheck / 784.0) > 127;
 
         double sumaFinal = 0;
         for (int y = 0; y < 28; y++) {
             for (int x = 0; x < 28; x++) {
                 int gray = (resized.getRGB(x, y) & 0xFF);
-
-                if (debeInvertir) {
-                    gray = 255 - gray;
-                }
-
-                // --- BINARIZACIÓN (LIMPIEZA TOTAL) ---
-                // Si el pixel no es suficientemente brillante, lo hacemos negro puro (0)
-                // Si es brillante, lo dejamos como está o lo hacemos blanco puro (255)
-                if (gray < 140) {
-                    gray = 0;
-                }
+                if (debeInvertir) gray = 255 - gray;
+                if (gray < 140) gray = 0;
 
                 pixeles[y * 28 + x] = (byte) gray;
                 sumaFinal += (gray / 255.0);
             }
         }
 
-        System.out.println(
-            "[DEBUG Java] Suma normalizada calculada: " + sumaFinal
-        );
+        System.out.println("[DEBUG Java] Suma normalizada calculada: " + sumaFinal);
         return pixeles;
     }
 
     /**
-     * Ejecuta la tarea en un hilo separado para no congelar la UI de la UNI.
+     * Unificamos el procesamiento en un solo hilo asíncrono para Textos y Bytes puros.
      */
-    private void processTask(byte nodeType, String payload) {
+    private void processTask(byte nodeType, byte[] payload) {
         setLoading(true);
         new Thread(() -> {
-            // AIClient ya sabe cómo manejar el Socket y el ProtocolMessage
+            // Nota: Asegúrate de que aiClient.sendTask esté sobrecargado para aceptar byte[]
             String response = aiClient.sendTask(nodeType, payload);
 
             Platform.runLater(() -> {
                 appendMessage("ChatCube: " + response);
                 setLoading(false);
             });
-        })
-            .start();
+        }).start();
     }
 
     private void appendMessage(String msg) {
@@ -192,12 +180,8 @@ public class DesktopUI extends Application {
     }
 
     private void setLoading(boolean loading) {
-        statusLabel.setText(
-            loading ? "Estado: Procesando en Nodo..." : "Estado: Listo"
-        );
-        sendTextBtn.setDisable(loading);
-        sendImageBtn.setDisable(loading);
-        inputField.setDisable(loading);
+        statusLabel.setText(loading ? "Estado: Procesando en la red..." : "Estado: Conectado y Listo");
+        setControlsEnabled(!loading);
     }
 
     public static void main(String[] args) {

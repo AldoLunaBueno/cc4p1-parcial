@@ -36,20 +36,34 @@ public class AIClient {
             OutputStream out = socket.getOutputStream();
             InputStream in = socket.getInputStream()
         ) {
+            // 1. Enviar la petición
             out.write(requestBytes);
             out.flush();
 
-            // Lógica de lectura de respuesta...
+            // 2. Leer la cabecera de forma segura (9 bytes)
             byte[] headerBuffer = new byte[MessageCodec.HEADER_SIZE];
-            in.read(headerBuffer);
+            int headerRead = 0;
+            while (headerRead < MessageCodec.HEADER_SIZE) {
+                int read = in.read(headerBuffer, headerRead, MessageCodec.HEADER_SIZE - headerRead);
+                if (read == -1) throw new Exception("Conexión cerrada por el servidor al leer cabecera.");
+                headerRead += read;
+            }
+            
             ProtocolMessage resHeader = MessageCodec.decodeHeader(headerBuffer);
 
+            // 3. Leer el payload de forma segura (Ciclo While para evitar fragmentación TCP)
             byte[] payloadBuffer = new byte[resHeader.getPayloadLength()];
-            in.read(payloadBuffer);
+            int payloadRead = 0;
+            while (payloadRead < payloadBuffer.length) {
+                int read = in.read(payloadBuffer, payloadRead, payloadBuffer.length - payloadRead);
+                if (read == -1) throw new Exception("Fin de flujo inesperado al leer el payload.");
+                payloadRead += read;
+            }
 
             return new String(payloadBuffer);
+            
         } catch (Exception e) {
-            return "Error: " + e.getMessage();
+            return "Error de Red: " + e.getMessage();
         }
     }
 }
