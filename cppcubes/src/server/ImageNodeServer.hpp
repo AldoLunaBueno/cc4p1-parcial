@@ -4,9 +4,12 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <netinet/in.h>
+#include "../chunk/RnnChunk.hpp"
 
 class ImageNodeServer {
 public:
+    // Constructor con puerto y configuración de hilos para procesamiento paralelo
     ImageNodeServer(int port, int numThreads);
     void start();
 
@@ -14,6 +17,7 @@ private:
     int port;
     int numThreads;
     int serverSocket;
+    RnnChunk rnnTool; // La red neuronal persiste en RAM para evitar recargas de pesos
 
     void handleConnection(int clientSocket);
     void sendResponse(int clientSocket, uint8_t nodeType, uint32_t clientId, const std::string& responseText);

@@ -1,6 +1,7 @@
 package uni.math;
 
 public class Matrix {
+
     private final int rows;
     private final int cols;
     private final double[][] data;
@@ -20,7 +21,15 @@ public class Matrix {
         }
     }
 
-    public int getRows() { return rows; }
-    public int getCols() { return cols; }
-    public double[][] getData() { return data; }
+    public int getRows() {
+        return rows;
+    }
+
+    public int getCols() {
+        return cols;
+    }
+
+    public double[][] getData() {
+        return data;
+    }
 }
