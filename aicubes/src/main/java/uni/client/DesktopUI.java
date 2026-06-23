@@ -1,18 +1,20 @@
 package uni.client;
 
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import javax.imageio.ImageIO;
+
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import uni.server.MessageRouter;
-
-import java.io.File;
 
 public class DesktopUI extends Application {
 
@@ -26,17 +28,10 @@ public class DesktopUI extends Application {
     private Label statusLabel;
 
     @Override
-    public void init() {
-        // Inicializamos el cliente (Host, Puerto, ID de Cliente)
-        // En un escenario real, esto podría venir de un login
-        this.aiClient = new AIClient("127.0.0.1", 8080, 812);
-    }
-
-    @Override
     public void start(Stage primaryStage) {
         primaryStage.setTitle("Open AI Cube - Cliente Distribuido");
 
-        // --- 1. Barra de Conexión ---
+        // --- 1. Barra de Conexión (Nuestro diseño distribuido) ---
         ipServerField = new TextField("127.0.0.1");
         ipServerField.setPromptText("IP Servidor Central");
         connectBtn = new Button("Conectar");
@@ -53,24 +48,26 @@ public class DesktopUI extends Application {
 
         // --- 3. Controles de Mensaje ---
         inputField = new TextField();
-        inputField.setPromptText("Ingrese consulta...");
+        inputField.setPromptText("Escribe tu consulta de texto aquí...");
         HBox.setHgrow(inputField, Priority.ALWAYS);
-
-        // 3. Botones de acción
+        
         sendTextBtn = new Button("Enviar Texto");
         sendImageBtn = new Button("Enviar Imagen");
         
-        // Bloqueo inicial según requerimiento
+        // Bloqueo inicial hasta que haya conexión
         setControlsEnabled(false);
 
         HBox actionBox = new HBox(10, inputField, sendTextBtn, sendImageBtn);
+        actionBox.setPadding(new Insets(10, 0, 0, 0));
+        
         statusLabel = new Label("Estado: Desconectado");
 
-        // --- Lógica de Conexión ---
+        // --- Lógica de Interfaz ---
         connectBtn.setOnAction(e -> {
             String host = ipServerField.getText().trim();
             if (!host.isEmpty()) {
-                this.aiClient = new AIClient(host, 8080, 812);
+                int clientId = (int) (Math.random() * 1000);
+                this.aiClient = new AIClient(host, 8080, clientId);
                 setControlsEnabled(true);
                 statusLabel.setText("Estado: Conectado a " + host);
                 appendMessage("SISTEMA: Conexión establecida con el Cubo Central.");
@@ -78,10 +75,12 @@ public class DesktopUI extends Application {
         });
 
         sendTextBtn.setOnAction(e -> handleSendText());
+        inputField.setOnAction(e -> handleSendText());
         sendImageBtn.setOnAction(e -> handleSendImage(primaryStage));
 
-        VBox root = new VBox(connectionBox, chatArea, actionBox, statusLabel);
-        root.setPadding(new Insets(10));
+        VBox root = new VBox(10, connectionBox, chatArea, actionBox, statusLabel);
+        root.setPadding(new Insets(15));
+        root.setStyle("-fx-background-color: #f4f4f4;");
         
         primaryStage.setScene(new Scene(root, 700, 500));
         primaryStage.show();
@@ -99,7 +98,8 @@ public class DesktopUI extends Application {
 
         appendMessage("Yo (Texto): " + text);
         inputField.clear();
-        processTask(MessageRouter.NODE_TEXT, text);
+        // Enviamos el texto convirtiéndolo a bytes
+        processTask(MessageRouter.NODE_TEXT, text.getBytes());
     }
 
     private void handleSendImage(Stage stage) {
@@ -111,23 +111,63 @@ public class DesktopUI extends Application {
         
         File file = fileChooser.showOpenDialog(stage);
         if (file != null) {
-            appendMessage("Yo (Imagen): " + file.getName());
-            // En este sprint enviamos el nombre o un placeholder como payload
-            processTask(MessageRouter.NODE_IMAGE, "Procesando archivo: " + file.getName());
+            appendMessage("Yo (Imagen): Procesando archivo " + file.getName() + "...");
+
+            try {
+                // Usamos la excelente lógica matemática de tu compañero
+                byte[] pixeles = transformarImagen(file);
+                processTask(MessageRouter.NODE_IMAGE, pixeles);
+            } catch (Exception e) {
+                appendMessage("Error procesando imagen: " + e.getMessage());
+            }
         }
     }
 
+    // --- ALGORITMO DE TRANSFORMACIÓN DE IMAGEN (Conservado intacto) ---
+    private byte[] transformarImagen(File file) throws Exception {
+        BufferedImage original = ImageIO.read(file);
+
+        Image scaled = original.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
+        BufferedImage resized = new BufferedImage(28, 28, BufferedImage.TYPE_BYTE_GRAY);
+        Graphics2D g2d = resized.createGraphics();
+        g2d.drawImage(scaled, 0, 0, null);
+        g2d.dispose();
+
+        byte[] pixeles = new byte[784];
+        double sumaCheck = 0;
+
+        for (int y = 0; y < 28; y++) {
+            for (int x = 0; x < 28; x++) {
+                sumaCheck += (resized.getRGB(x, y) & 0xFF);
+            }
+        }
+        boolean debeInvertir = (sumaCheck / 784.0) > 127;
+
+        double sumaFinal = 0;
+        for (int y = 0; y < 28; y++) {
+            for (int x = 0; x < 28; x++) {
+                int gray = (resized.getRGB(x, y) & 0xFF);
+                if (debeInvertir) gray = 255 - gray;
+                if (gray < 140) gray = 0;
+
+                pixeles[y * 28 + x] = (byte) gray;
+                sumaFinal += (gray / 255.0);
+            }
+        }
+
+        System.out.println("[DEBUG Java] Suma normalizada calculada: " + sumaFinal);
+        return pixeles;
+    }
+
     /**
-     * Ejecuta la tarea en un hilo separado para no congelar la UI de la UNI.
+     * Unificamos el procesamiento en un solo hilo asíncrono para Textos y Bytes puros.
      */
-    private void processTask(byte nodeType, String payload) {
+    private void processTask(byte nodeType, byte[] payload) {
         setLoading(true);
-        
         new Thread(() -> {
-            // Llamada bloqueante al socket (Capa de Red)
+            // Nota: Asegúrate de que aiClient.sendTask esté sobrecargado para aceptar byte[]
             String response = aiClient.sendTask(nodeType, payload);
 
-            // Regresamos al hilo de UI para mostrar el resultado
             Platform.runLater(() -> {
                 appendMessage("ChatCube: " + response);
                 setLoading(false);
@@ -140,10 +180,8 @@ public class DesktopUI extends Application {
     }
 
     private void setLoading(boolean loading) {
-        statusLabel.setText(loading ? "Estado: Procesando en Nodo..." : "Estado: Listo");
-        sendTextBtn.setDisable(loading);
-        sendImageBtn.setDisable(loading);
-        inputField.setDisable(loading);
+        statusLabel.setText(loading ? "Estado: Procesando en la red..." : "Estado: Conectado y Listo");
+        setControlsEnabled(!loading);
     }
 
     public static void main(String[] args) {
